@@ -11,30 +11,44 @@ Future<void> requestGalleryPermissions() async {
   }
 }
 
-Future<void> fetchImages() async {
+Future<List<AssetEntity>> fetchImages() async {
   List<AssetEntity> images = [];
 
   // Request permission first
-  final permission = await PhotoManager.requestPermissionExtend();
-  if (permission.isAuth) {
+  await PhotoManager.requestPermissionExtend(
+      requestOption: PermissionRequestOption(
+          androidPermission:
+              AndroidPermission(type: RequestType.image, mediaLocation: true)));
+  PermissionStatus permission = await Permission.photos.request();
+  print(permission);
+  if (permission.isGranted) {
     // Fetch all images from the gallery
+
     final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
-      onlyAll: true,
+      onlyAll: false,
+      hasAll: false,
       type: RequestType.image,
     );
-    final List<AssetEntity> assets = await albums.first.getAssetListPaged(page: 0,size: 100);
-    images.addAll(assets);
-    
+    print(albums);
+    List<AssetEntity> assets = [];
+
+    for (var path in albums) {
+      assets = await path.getAssetListPaged(page: 0, size: 100);
+      images.addAll(assets);
+    }
+
     for (var asset in images) {
       print("Image: ${asset.title}");
     }
+    return assets;
   } else {
     print("Permission not granted");
+    return [];
   }
 }
 
 Future<void> fetchImageMetadata(AssetEntity asset) async {
-  var location =  asset.latitude;  // Get latitude
+  var location = asset.latitude; // Get latitude
   var longitude = asset.longitude; // Get longitude
 
   if (location != null && longitude != null) {
