@@ -19,7 +19,7 @@ class FaceRecognitionService {
   }
 
   // Function to get face embeddings
-  Future<List<double>?> getFaceEmbeddings(File image) async {
+  Future<List<List<double>>> getFaceEmbeddings(File image) async {
     // Preprocess the image if necessary (resize, normalize, etc.)
     // Load image as a tensor
     final img = await preprocessImageWithBatch(image);
@@ -32,7 +32,7 @@ class FaceRecognitionService {
 
     if (_interpreter.isAllocated) _interpreter.run(img, output);
 
-    return output[0];
+    return output;
   }
 
   // Compare two face embeddings
@@ -96,12 +96,13 @@ class FaceRecognitionService {
       dotProduct += embedding1[i] * embedding2[i];
       normEmbedding1 += pow(embedding1[i], 2);
       normEmbedding2 += pow(embedding2[i], 2);
+      
     }
 
     double similarity =
         dotProduct / (sqrt(normEmbedding1) * sqrt(normEmbedding2));
     print(similarity);
 
-    return similarity > .80;
+    return similarity > .90;
   }
 }

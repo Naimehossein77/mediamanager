@@ -219,6 +219,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.5.0"
+  photo_manager_image_provider:
+    dependency: "direct main"
+    description:
+      name: photo_manager_image_provider
+      sha256: bc0b8bf01a4f9e74b2085ed346b6e8bc786b17ab4e1fc568085d4d08f423fca8
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
   plugin_platform_interface:
     dependency: transitive
     description:

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
@@ -6,6 +7,7 @@ import 'package:mediamanager/media.dart';
 import 'package:mediamanager/mlkit.dart';
 import 'package:mediamanager/tflite.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -37,87 +39,142 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatelessWidget {
+class MyHomePage extends StatefulWidget {
   MyHomePage({super.key});
 
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
   List<AssetEntity> imageList = [];
+
   List<AssetEntity> personList = [];
+
   List<List<double>> faceEmbeddings = [];
+
+  List<AssetEntity> matchedImageList = [];
+
+  Future<List<AssetEntity>> selectImages() async {
+    return imageList = await fetchImages();
+  }
+
+  void fetchAllImageMetadata(List<AssetEntity> imageList) async {
+    for (var element in imageList) {
+      fetchImageMetadata(element);
+    }
+  }
+
+  Future<List<AssetEntity>> getDetectedFaces(
+      List<AssetEntity> imageList) async {
+    List<AssetEntity> personList = [];
+    for (var element in imageList) {
+      int faces = await detectFaces((await element.file) ?? File(''));
+      if (faces > 0) {
+        personList.add(element);
+      }
+    }
+    return personList;
+  }
+
+  Future<List<List<double>>> getAllPersonFaceEmbedding(
+      List<AssetEntity> personList) async {
+    try {
+      for (var element in personList) {
+        faceEmbeddings.addAll(await FaceRecognitionService()
+            .getFaceEmbeddings((await element.file) ?? File('')));
+      }
+      print(faceEmbeddings.length);
+      return faceEmbeddings;
+    } catch (e) {
+      print(e);
+      return [];
+    }
+  }
+
+  Future<List<AssetEntity>> compareFaces(List<AssetEntity> personList) async {
+    try {
+      List<AssetEntity> matchedList = [];
+      for (int i = 0; i < faceEmbeddings.length; i++) {
+        for (int j = i + 1; j < faceEmbeddings.length; j++) {
+          bool isSame = await FaceRecognitionService()
+              .cosineSimilarity(faceEmbeddings[i], faceEmbeddings[j]);
+          if (isSame) {
+            matchedList.add(personList[i]);
+            matchedList.add(personList[j]);
+          }
+        }
+      }
+      return matchedList;
+    } catch (e) {
+      print(e);
+      return [];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Align(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: () async {
-                imageList = await fetchImages();
-              },
-              child: Text("Select images"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                for (var element in imageList) {
-                  fetchImageMetadata(element);
-                }
-              },
-              child: Text("Fetch Location"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                for (var element in imageList) {
-                  int faces =
-                      await detectFaces((await element.file) ?? File(''));
-                  if (faces > 0) {
-                    personList.add(element);
-                  }
-                }
-              },
-              child: Text("Detect Faces"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                FaceRecognitionService().loadModel();
-              },
-              child: Text("load tflite model"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  for (var element in personList) {
-                    faceEmbeddings.add(await FaceRecognitionService()
-                            .getFaceEmbeddings(
-                                (await element.file) ?? File('')) ??
-                        []);
-                  }
-                  print(faceEmbeddings.length);
-                } catch (e) {
-                  print(e);
-                }
-              },
-              child: Text("get face embeddings"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  for (int i = 0; i < faceEmbeddings.length; i++) {
-                    for (int j = 0; j < faceEmbeddings.length; j++) {
-                      bool isSame = await FaceRecognitionService()
-                          .compareEmbeddings(
-                              faceEmbeddings[i], faceEmbeddings[j]);
-                      print(isSame);
-                    }
-                    print('\n');
-                  }
-                } catch (e) {
-                  print(e);
-                }
-              },
-              child: Text("compare faces"),
-            ),
-          ],
+      body: SingleChildScrollView(
+        child: Align(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton(
+                onPressed: () async {
+                  this.imageList = await selectImages();
+                },
+                child: Text("Select images"),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  fetchAllImageMetadata(this.imageList);
+                },
+                child: Text("Fetch Location"),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  this.personList = await getDetectedFaces(this.imageList);
+                },
+                child: Text("Detect Faces"),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  FaceRecognitionService().loadModel();
+                },
+                child: Text("load tflite model"),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  getAllPersonFaceEmbedding(this.imageList);
+                },
+                child: Text("get face embeddings"),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  this.matchedImageList = await compareFaces(this.imageList);
+                  setState(() {});
+                },
+                child: Text("compare faces"),
+              ),
+              GridView.builder(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: matchedImageList.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2),
+                  itemBuilder: (context, index) {
+                    return AssetEntityImage(
+                      matchedImageList[index],
+                      isOriginal: false, // Defaults to `true`.
+                      thumbnailSize:
+                          const ThumbnailSize.square(200), // Preferred value.
+                      thumbnailFormat:
+                          ThumbnailFormat.jpeg, // Defaults to `jpeg`.
+                    );
+                  })
+            ],
+          ),
         ),
       ),
     );
