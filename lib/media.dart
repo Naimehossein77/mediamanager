@@ -4,17 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-Future<void> requestGalleryPermissions() async {
-  var status = await Permission.photos.request();
-  if (status.isGranted) {
-    // If permission is granted, fetch the images
-    await fetchImages();
-  } else {
-    print("Permission denied");
-  }
-}
-
-Future<List<AssetEntity>> fetchImages() async {
+Future<List<AssetEntity>> fetchImages(int page) async {
   List<AssetEntity> images = [];
 
   // Request permission first
@@ -40,7 +30,7 @@ Future<List<AssetEntity>> fetchImages() async {
     // Fetch all images from the gallery
 
     final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
-      onlyAll: false,
+      onlyAll: true,
       hasAll: false,
       type: RequestType.image,
     );
@@ -48,12 +38,13 @@ Future<List<AssetEntity>> fetchImages() async {
     List<AssetEntity> assets = [];
 
     for (var path in albums) {
-      assets = await path.getAssetListPaged(page: 0, size: 10);
+      
+      assets = await path.getAssetListPaged(page: page, size: 10);
       images.addAll(assets);
     }
 
     for (var asset in images) {
-      print("Image: ${asset.title}");
+      print("Image: ${asset.relativePath}");
     }
     return assets;
   } else {

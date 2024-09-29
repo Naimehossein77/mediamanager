@@ -7,13 +7,13 @@ import 'package:image/image.dart' as img;
 class FaceRecognitionService {
   static late Interpreter _interpreter;
 
-  int input = 112;
-  int outt = 128;
+  int input = 160;
+  int outt = 512;
 
   // Load the TFLite model
   Future<void> loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset('assets/output_model.tflite');
+      _interpreter = await Interpreter.fromAsset('assets/facenet.tflite');
       print('Model loaded successfully ${_interpreter.isAllocated}');
       print('Model input shape: ${_interpreter.getInputTensor(0).shape}');
     } catch (e) {

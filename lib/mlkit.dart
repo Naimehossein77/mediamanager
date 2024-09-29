@@ -3,7 +3,9 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 Future<List<Face>> detectFaces(File imageFile) async {
   final InputImage inputImage = InputImage.fromFile(imageFile);
-  final faceDetector = FaceDetector(options: FaceDetectorOptions());
+  final faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+          performanceMode: FaceDetectorMode.accurate, minFaceSize: .4));
 
   // Process the image to detect faces
   final List<Face> faces = await faceDetector.processImage(inputImage);

@@ -58,19 +58,26 @@ class _MyHomePageState extends State<MyHomePage> {
   List<File> matchedImageList = [];
   List<int> label = [];
 
-  Future<List<AssetEntity>> selectImages() async {
-    return imageList = await fetchImages();
+  Future<List<AssetEntity>> selectImages(int page) async {
+    return imageList = await fetchImages(page);
   }
 
   initializeAI() async {
-    this.imageList = await selectImages();
-    fetchAllImageMetadata(this.imageList);
-    this.personList = await getDetectedFaces(this.imageList);
     await FaceRecognitionService().loadModel();
-    await getAllPersonFaceEmbedding(this.personList);
-    await getDbScanOnPerson(this.faceEmbeddings);
-    // this.matchedImageList = await compareFaces(personList);
-    setState(() {});
+    for (int i = 0; i < 10; i++) {
+      this.imageList.clear();
+      this.personList.clear();
+      this.faceEmbeddings.clear();
+      this.imageList = await selectImages(i);
+      if (this.imageList.isEmpty) break;
+      fetchAllImageMetadata(this.imageList);
+      this.personList = await getDetectedFaces(this.imageList);
+      await getAllPersonFaceEmbedding(this.personList);
+      await getDbScanOnPerson(this.faceEmbeddings);
+      // this.matchedImageList = await compareFaces(personList);
+      setState(() {});
+      await Future.delayed(Duration(seconds: 10));
+    }
   }
 
   void fetchAllImageMetadata(List<AssetEntity> imageList) async {
@@ -134,14 +141,15 @@ class _MyHomePageState extends State<MyHomePage> {
   getDbScanOnPerson(List<List<double>> embeddings) async {
     double eps = .9; // Max distance for a neighbor
     int minPts = 2; // Minimum points to form a cluster
-    matchedImageList.clear();
-    label.clear();
-
+    // matchedImageList.clear();
+    // label.clear();
+    print(embeddings);
     // int minPts = 2 * faceEmbeddings[0].length;
     // double eps = findOptimalEps(faceEmbeddings, minPts);
     print(minPts);
     print(eps);
     List<int> clusters = dbscan(embeddings, eps, minPts);
+    print(clusters);
     for (int i = 0; i < personList.length; i++) {
       if (clusters[i] != -1) {
         matchedImageList.add(personList[i]);
@@ -209,7 +217,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     physics: NeverScrollableScrollPhysics(),
                     itemCount: matchedImageList.length,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2, childAspectRatio: .8),
+                        crossAxisCount: 2, childAspectRatio: .7),
                     itemBuilder: (context, index) {
                       return Column(
                         children: [
