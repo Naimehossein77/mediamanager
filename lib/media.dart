@@ -26,14 +26,14 @@ Future<List<AssetEntity>> fetchImages() async {
 
     final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
       onlyAll: false,
-      hasAll: false,
+      hasAll: true,
       type: RequestType.image,
     );
     print(albums);
     List<AssetEntity> assets = [];
 
     for (var path in albums) {
-      assets = await path.getAssetListPaged(page: 0, size: 100);
+    assets = await path.getAssetListPaged(page: 0, size: 10);
       images.addAll(assets);
     }
 

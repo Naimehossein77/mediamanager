@@ -1,14 +1,13 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
-Future<int> detectFaces(File imageFile) async {
+Future<List<Face>> detectFaces(File imageFile) async {
   final InputImage inputImage = InputImage.fromFile(imageFile);
   final faceDetector = FaceDetector(options: FaceDetectorOptions());
 
   // Process the image to detect faces
   final List<Face> faces = await faceDetector.processImage(inputImage);
-  print("Number of faces detected: ${faces.length}");
+  print("Number of faces detected: ${faces}");
 
   // for (Face face in faces) {
   //   final Rect boundingBox = face.boundingBox;
@@ -16,5 +15,5 @@ Future<int> detectFaces(File imageFile) async {
   // }
 
   faceDetector.close();
-  return faces.length;
+  return faces;
 }

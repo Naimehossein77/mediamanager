@@ -41,6 +41,7 @@ dependencies:
   tflite_flutter: ^0.10.0
   image: ^4.2.0
   photo_manager_image_provider: ^1.1.1
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:

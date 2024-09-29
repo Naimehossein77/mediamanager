@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:mediamanager/copImage.dart';
+import 'package:mediamanager/dbscan.dart';
 import 'package:mediamanager/media.dart';
 import 'package:mediamanager/mlkit.dart';
 import 'package:mediamanager/tflite.dart';
@@ -49,14 +51,26 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   List<AssetEntity> imageList = [];
 
-  List<AssetEntity> personList = [];
+  List<File> personList = [];
 
   List<List<double>> faceEmbeddings = [];
 
-  List<AssetEntity> matchedImageList = [];
+  List<File> matchedImageList = [];
+  List<int> label = [];
 
   Future<List<AssetEntity>> selectImages() async {
     return imageList = await fetchImages();
+  }
+
+  initializeAI() async {
+    this.imageList = await selectImages();
+    fetchAllImageMetadata(this.imageList);
+    this.personList = await getDetectedFaces(this.imageList);
+    await FaceRecognitionService().loadModel();
+    await getAllPersonFaceEmbedding(this.personList);
+    await getDbScanOnPerson(this.faceEmbeddings);
+    // this.matchedImageList = await compareFaces(personList);
+    setState(() {});
   }
 
   void fetchAllImageMetadata(List<AssetEntity> imageList) async {
@@ -65,24 +79,28 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<List<AssetEntity>> getDetectedFaces(
-      List<AssetEntity> imageList) async {
-    List<AssetEntity> personList = [];
+  Future<List<File>> getDetectedFaces(List<AssetEntity> imageList) async {
+    List<File> personList = [];
+    int i = 0;
+    File? file;
     for (var element in imageList) {
-      int faces = await detectFaces((await element.file) ?? File(''));
-      if (faces > 0) {
-        personList.add(element);
+      List<Face> faces = await detectFaces((await element.file) ?? File(''));
+      for (var face in faces) {
+        file = await cropFaceAndSaveToCache(element, face.boundingBox);
+        if (file != null && faces.isNotEmpty) {
+          personList.add(file);
+        }
       }
     }
     return personList;
   }
 
   Future<List<List<double>>> getAllPersonFaceEmbedding(
-      List<AssetEntity> personList) async {
+      List<File> personList) async {
     try {
       for (var element in personList) {
-        faceEmbeddings.addAll(await FaceRecognitionService()
-            .getFaceEmbeddings((await element.file) ?? File('')));
+        faceEmbeddings.addAll(
+            await FaceRecognitionService().getFaceEmbeddings((await element)));
       }
       print(faceEmbeddings.length);
       return faceEmbeddings;
@@ -92,9 +110,9 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<List<AssetEntity>> compareFaces(List<AssetEntity> personList) async {
+  Future<List<File>> compareFaces(List<File> personList) async {
     try {
-      List<AssetEntity> matchedList = [];
+      List<File> matchedList = [];
       for (int i = 0; i < faceEmbeddings.length; i++) {
         for (int j = i + 1; j < faceEmbeddings.length; j++) {
           bool isSame = await FaceRecognitionService()
@@ -105,6 +123,7 @@ class _MyHomePageState extends State<MyHomePage> {
           }
         }
       }
+      setState(() {});
       return matchedList;
     } catch (e) {
       print(e);
@@ -112,68 +131,101 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  getDbScanOnPerson(List<List<double>> embeddings) async {
+    double eps = 0.85; // Max distance for a neighbor
+    int minPts = 2; // Minimum points to form a cluster
+
+    List<int> clusters = dbscan(embeddings, eps, minPts);
+    for (int i = 0; i < personList.length; i++) {
+      if (clusters[i] != -1) {
+        matchedImageList.add(personList[i]);
+        label.add(clusters[i]);
+      }
+    }
+    print(clusters);
+    setState(() {});
+  }
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    initializeAI();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Align(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton(
-                onPressed: () async {
-                  this.imageList = await selectImages();
-                },
-                child: Text("Select images"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  fetchAllImageMetadata(this.imageList);
-                },
-                child: Text("Fetch Location"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  this.personList = await getDetectedFaces(this.imageList);
-                },
-                child: Text("Detect Faces"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  FaceRecognitionService().loadModel();
-                },
-                child: Text("load tflite model"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  getAllPersonFaceEmbedding(this.imageList);
-                },
-                child: Text("get face embeddings"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  this.matchedImageList = await compareFaces(this.imageList);
-                  setState(() {});
-                },
-                child: Text("compare faces"),
-              ),
-              GridView.builder(
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                  itemCount: matchedImageList.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2),
-                  itemBuilder: (context, index) {
-                    return AssetEntityImage(
-                      matchedImageList[index],
-                      isOriginal: false, // Defaults to `true`.
-                      thumbnailSize:
-                          const ThumbnailSize.square(200), // Preferred value.
-                      thumbnailFormat:
-                          ThumbnailFormat.jpeg, // Defaults to `jpeg`.
-                    );
-                  })
-            ],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Align(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // ElevatedButton(
+                //   onPressed: () async {
+                //     this.imageList = await selectImages();
+                //   },
+                //   child: Text("Select images"),
+                // ),
+                // ElevatedButton(
+                //   onPressed: () async {
+                //     fetchAllImageMetadata(this.imageList);
+                //   },
+                //   child: Text("Fetch Location"),
+                // ),
+                // ElevatedButton(
+                //   onPressed: () async {
+                //     this.personList = await getDetectedFaces(this.imageList);
+                //   },
+                //   child: Text("Detect Faces"),
+                // ),
+                // ElevatedButton(
+                //   onPressed: () async {
+                //     FaceRecognitionService().loadModel();
+                //   },
+                //   child: Text("load tflite model"),
+                // ),
+                // ElevatedButton(
+                //   onPressed: () async {
+                //     // getAllPersonFaceEmbedding(this.imageList);
+                //   },
+                //   child: Text("get face embeddings"),
+                // ),
+                // ElevatedButton(
+                //   onPressed: () async {
+                //     // this.matchedImageList = await compareFaces(this.imageList);
+
+                //     getDbScanOnPerson(this.faceEmbeddings);
+                //     setState(() {});
+                //   },
+                //   child: Text("compare faces"),
+                // ),
+                GridView.builder(
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                    itemCount: matchedImageList.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2, childAspectRatio: .8),
+                    itemBuilder: (context, index) {
+                      return Column(
+                        children: [
+                          Image.file(matchedImageList[index]),
+                          Text('${label[index]}')
+                        ],
+                      );
+                    }),
+                //   AssetEntityImage(
+                //     matchedImageList[index],
+                //     isOriginal: false, // Defaults to `true`.
+                //     thumbnailSize:
+                //         const ThumbnailSize.square(200), // Preferred value.
+                //     thumbnailFormat:
+                //         ThumbnailFormat.jpeg, // Defaults to `jpeg`.
+                //   );
+                // })
+              ],
+            ),
           ),
         ),
       ),
