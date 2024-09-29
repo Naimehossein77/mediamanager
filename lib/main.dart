@@ -132,9 +132,15 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   getDbScanOnPerson(List<List<double>> embeddings) async {
-    double eps = 0.85; // Max distance for a neighbor
+    double eps = .9; // Max distance for a neighbor
     int minPts = 2; // Minimum points to form a cluster
+    matchedImageList.clear();
+    label.clear();
 
+    // int minPts = 2 * faceEmbeddings[0].length;
+    // double eps = findOptimalEps(faceEmbeddings, minPts);
+    print(minPts);
+    print(eps);
     List<int> clusters = dbscan(embeddings, eps, minPts);
     for (int i = 0; i < personList.length; i++) {
       if (clusters[i] != -1) {
@@ -192,15 +198,12 @@ class _MyHomePageState extends State<MyHomePage> {
                 //   },
                 //   child: Text("get face embeddings"),
                 // ),
-                // ElevatedButton(
-                //   onPressed: () async {
-                //     // this.matchedImageList = await compareFaces(this.imageList);
-
-                //     getDbScanOnPerson(this.faceEmbeddings);
-                //     setState(() {});
-                //   },
-                //   child: Text("compare faces"),
-                // ),
+                ElevatedButton(
+                  onPressed: () async {
+                    getDbScanOnPerson(this.faceEmbeddings);
+                  },
+                  child: Text("compare faces"),
+                ),
                 GridView.builder(
                     shrinkWrap: true,
                     physics: NeverScrollableScrollPhysics(),

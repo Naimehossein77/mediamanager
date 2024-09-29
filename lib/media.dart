@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -19,21 +22,33 @@ Future<List<AssetEntity>> fetchImages() async {
       requestOption: PermissionRequestOption(
           androidPermission:
               AndroidPermission(type: RequestType.image, mediaLocation: true)));
-  PermissionStatus permission = await Permission.photos.request();
+  PermissionStatus permission;
+  if (Platform.isAndroid) {
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    if (androidInfo.version.sdkInt <= 32) {
+      /// use [Permissions.storage.status]
+      permission = await Permission.storage.request();
+    } else {
+      /// use [Permissions.photos.status]
+      permission = await Permission.photos.request();
+    }
+  } else {
+    permission = await Permission.photos.request();
+  }
   print(permission);
   if (permission.isGranted) {
     // Fetch all images from the gallery
 
     final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
       onlyAll: false,
-      hasAll: true,
+      hasAll: false,
       type: RequestType.image,
     );
     print(albums);
     List<AssetEntity> assets = [];
 
     for (var path in albums) {
-    assets = await path.getAssetListPaged(page: 0, size: 10);
+      assets = await path.getAssetListPaged(page: 0, size: 10);
       images.addAll(assets);
     }
 
