@@ -4,10 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-Future<List<AssetEntity>> fetchImages(int page) async {
-  List<AssetEntity> images = [];
-
-  // Request permission first
+Future<PermissionStatus> requestStoragePhotosPermission() async {
   await PhotoManager.requestPermissionExtend(
       requestOption: PermissionRequestOption(
           androidPermission:
@@ -25,9 +22,13 @@ Future<List<AssetEntity>> fetchImages(int page) async {
   } else {
     permission = await Permission.photos.request();
   }
-  print(permission);
-  if (permission.isGranted) {
-    // Fetch all images from the gallery
+  return permission;
+}
+
+Future<List<AssetEntity>> fetchImages(int page) async {
+  List<AssetEntity> images = [];
+
+  // Request permission first
 
     final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
       onlyAll: true,
@@ -38,7 +39,6 @@ Future<List<AssetEntity>> fetchImages(int page) async {
     List<AssetEntity> assets = [];
 
     for (var path in albums) {
-      
       assets = await path.getAssetListPaged(page: page, size: 10);
       images.addAll(assets);
     }
@@ -47,11 +47,7 @@ Future<List<AssetEntity>> fetchImages(int page) async {
       print("Image: ${asset.relativePath}");
     }
     return assets;
-  } else {
-    print("Permission not granted");
-    return [];
   }
-}
 
 Future<void> fetchImageMetadata(AssetEntity asset) async {
   var location = asset.latitude; // Get latitude

@@ -2,19 +2,26 @@ import 'dart:developer';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:mediamanager/copImage.dart';
 import 'package:mediamanager/image_converter_heic.dart';
+import 'package:mediamanager/isolate_thread.dart';
 import 'package:mediamanager/media.dart';
 import 'package:mediamanager/mlkit.dart';
 import 'package:mediamanager/sqflite.dart';
 import 'package:mediamanager/tflite.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import 'package:path/path.dart';
 
 void main() {
+  BackgroundIsolateBinaryMessenger.ensureInitialized(
+      RootIsolateToken.instance!);
+
   WidgetsFlutterBinding.ensureInitialized();
+
   runApp(const MyApp());
 }
 
@@ -67,74 +74,74 @@ class _MyHomePageState extends State<MyHomePage> {
     return imageList = await fetchImages(page);
   }
 
-  initializeAI() async {
-    await FaceRecognitionService().loadModel();
-    for (int i = 0; i < 10; i++) {
-      this.imageList.clear();
-      this.personList.clear();
-      this.faceEmbeddings.clear();
-      this.imageList = await selectImages(i);
-      if (this.imageList.isEmpty) {
-        FaceDetectorManager.instance.dispose();
+  // initializeAI() async {
+  //   await FaceRecognitionService().loadModel();
+  //   for (int i = 0; i < 10; i++) {
+  //     this.imageList.clear();
+  //     this.personList.clear();
+  //     this.faceEmbeddings.clear();
+  //     this.imageList = await selectImages(i);
+  //     if (this.imageList.isEmpty) {
+  //       FaceDetectorManager.instance.dispose();
 
-        FaceRecognitionService().dispose();
-        break;
-      }
-      List<Face> faces = [];
-      File file;
-      // List<double> embedding = [];
-      List<List<double>> groupEmbedding = [];
-      for (var image in imageList) {
-        faces.clear();
-        // embedding.clear();
-        // groupEmbedding.clear();
-        file = await image.file ?? File('');
-        print("filepath: " + file.path);
-        if (file.path.contains('.HEIC') ||
-            file.path.contains('.heic') ||
-            file.path.contains('.heif')) {
-          String path =
-              await ImageConverter.instance.convertHeicToJpg(file.path);
-          file = File(path);
-        }
-        faces = await FaceDetectorManager.instance.detectFaces(file);
-        if (faces.isNotEmpty && file.path.isNotEmpty) {
-          for (var face in faces) {
-            File croppedFile = await cropImage(file, face);
-            groupEmbedding =
-                await FaceRecognitionService().getFaceEmbeddings(croppedFile);
-            var dbEmbeddingData = await dbHelper.getAllEmbeddings();
+  //       FaceRecognitionService().dispose();
+  //       break;
+  //     }
+  //     List<Face> faces = [];
+  //     File file;
+  //     // List<double> embedding = [];
+  //     List<List<double>> groupEmbedding = [];
+  //     for (var image in imageList) {
+  //       faces.clear();
+  //       // embedding.clear();
+  //       // groupEmbedding.clear();
+  //       file = await image.file ?? File('');
+  //       print("filepath: " + file.path);
+  //       if (file.path.contains('.HEIC') ||
+  //           file.path.contains('.heic') ||
+  //           file.path.contains('.heif')) {
+  //         String path =
+  //             await ImageConverter.instance.convertHeicToJpg(file.path);
+  //         file = File(path);
+  //       }
+  //       faces = await FaceDetectorManager.instance.detectFaces(file);
+  //       if (faces.isNotEmpty && file.path.isNotEmpty) {
+  //         for (var face in faces) {
+  //           File croppedFile = await cropImage(file, face);
+  //           groupEmbedding =
+  //               await FaceRecognitionService().getFaceEmbeddings(croppedFile);
+  //           var dbEmbeddingData = await dbHelper.getAllEmbeddings();
 
-            for (var embedding in groupEmbedding) {
-              if (dbEmbeddingData.isEmpty) {
-                int id = await dbHelper.insertEmbedding(
-                    basename(file.path), embedding);
-                dbHelper.insertImagePath(id, file.path);
-              } else {
-                for (var dbEmbedding in dbEmbeddingData) {
-                  bool similarity = FaceRecognitionService()
-                      .cosineSimilarity(embedding, dbEmbedding.embedding);
-                  if (similarity) {
-                    // found similarity
-                    log('found similarity');
-                    dbHelper.insertImagePath(dbEmbedding.id, file.path);
-                  } else {
-                    dbHelper.insertEmbedding(basename(file.path), embedding);
-                  }
-                }
-              }
-            }
-          }
-        }
-       await Future.delayed(Duration(seconds: 2));
-      }
-      setState(() {});
-      await Future.delayed(Duration(seconds: 3));
-    }
-  }
+  //           for (var embedding in groupEmbedding) {
+  //             if (dbEmbeddingData.isEmpty) {
+  //               int id = await dbHelper.insertEmbedding(
+  //                   basename(file.path), embedding);
+  //               dbHelper.insertImagePath(id, file.path);
+  //             } else {
+  //               for (var dbEmbedding in dbEmbeddingData) {
+  //                 bool similarity = FaceRecognitionService()
+  //                     .cosineSimilarity(embedding, dbEmbedding.embedding);
+  //                 if (similarity) {
+  //                   // found similarity
+  //                   log('found similarity');
+  //                   dbHelper.insertImagePath(dbEmbedding.id, file.path);
+  //                 } else {
+  //                   dbHelper.insertEmbedding(basename(file.path), embedding);
+  //                 }
+  //               }
+  //             }
+  //           }
+  //         }
+  //       }
+  //      await Future.delayed(Duration(seconds: 2));
+  //     }
+  //     setState(() {});
+  //     await Future.delayed(Duration(seconds: 3));
+  //   }
+  // }
 
-  getImageByUserId() async {
-    this.imageModelList = await dbHelper.getImagesByUserId(3);
+  getImageByUserId(int id) async {
+    this.imageModelList = await dbHelper.getImagesByUserId(id);
     print(this.imageModelList);
     setState(() {});
   }
@@ -143,7 +150,21 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     // TODO: implement initState
     super.initState();
-    initializeAI();
+    requestPermissionAndCallAI();
+  }
+
+  requestPermissionAndCallAI() async {
+    PermissionStatus status = await requestStoragePhotosPermission();
+    if (status.isGranted) {
+      print('permission granted');
+      startIsolate();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    // TODO: implement didChangeDependencies
+    super.didChangeDependencies();
   }
 
   @override
@@ -166,7 +187,7 @@ class _MyHomePageState extends State<MyHomePage> {
               children: [
                 ElevatedButton(
                   onPressed: () async {
-                    getImageByUserId();
+                    getImageByUserId(3);
                   },
                   child: Text("compare faces"),
                 ),
