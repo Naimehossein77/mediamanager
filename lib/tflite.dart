@@ -21,11 +21,15 @@ class FaceRecognitionService {
     }
   }
 
+  void dispose() {
+    _interpreter.close();
+  }
+
   // Function to get face embeddings
   Future<List<List<double>>> getFaceEmbeddings(File image) async {
     // Preprocess the image if necessary (resize, normalize, etc.)
     // Load image as a tensor
-    final img = await preprocessImageWithBatch(image,input);
+    final img = await preprocessImageWithBatch(image, input);
 
     // Run the model
     var output = List.filled(
@@ -50,48 +54,46 @@ class FaceRecognitionService {
     distance = sqrt(distance);
     print(distance);
     // Set a threshold for comparison
-    return distance < 0.9; // Adjust this threshold based on your testing
+    return distance < 0.5; // Adjust this threshold based on your testing
   }
 
+  Future<List<List<List<List<double>>>>> preprocessImageWithBatch(
+      File imageFile, int inputSize) async {
+    // Load the image
+    img.Image? image = img.decodeImage(await imageFile.readAsBytes());
 
-
-Future<List<List<List<List<double>>>>> preprocessImageWithBatch(
-    File imageFile, int inputSize) async {
-  // Load the image
-  img.Image? image = img.decodeImage(await imageFile.readAsBytes());
-
-  if (image == null) {
-    throw Exception('Unable to decode image');
-  }
-
-  // Resize the image to the expected input size (e.g., 112x112 or 160x160 for MobileFaceNet)
-  img.Image resizedImage = img.copyResize(image, width: inputSize, height: inputSize);
-
-  // Normalize the pixel values between -1 and 1
-  List<List<List<double>>> normalizedImage = [];
-
-  for (int y = 0; y < resizedImage.height; y++) {
-    List<List<double>> row = [];
-    for (int x = 0; x < resizedImage.width; x++) {
-      var pixel = resizedImage.getPixel(x, y);
-
-      // Extract RGB values from the pixel
-      double r = pixel.r / 127.5 - 1.0;
-      double g = pixel.g / 127.5 - 1.0;
-      double b = pixel.b / 127.5 - 1.0;
-
-      // Add the normalized pixel to the row
-      row.add([r, g, b]);
+    if (image == null) {
+      throw Exception('Unable to decode image');
     }
-    normalizedImage.add(row);
+
+    // Resize the image to the expected input size (e.g., 112x112 or 160x160 for MobileFaceNet)
+    img.Image resizedImage =
+        img.copyResize(image, width: inputSize, height: inputSize);
+
+    // Normalize the pixel values between -1 and 1
+    List<List<List<double>>> normalizedImage = [];
+
+    for (int y = 0; y < resizedImage.height; y++) {
+      List<List<double>> row = [];
+      for (int x = 0; x < resizedImage.width; x++) {
+        var pixel = resizedImage.getPixel(x, y);
+
+        // Extract RGB values from the pixel
+        double r = pixel.r / 127.5 - 1.0;
+        double g = pixel.g / 127.5 - 1.0;
+        double b = pixel.b / 127.5 - 1.0;
+
+        // Add the normalized pixel to the row
+        row.add([r, g, b]);
+      }
+      normalizedImage.add(row);
+    }
+
+    // Add batch dimension to make it [1, height, width, channels]
+    return [
+      normalizedImage
+    ]; // Wrapping it in a list to add the batch dimension
   }
-
-  // Add batch dimension to make it [1, height, width, channels]
-  return [
-    normalizedImage
-  ]; // Wrapping it in a list to add the batch dimension
-}
-
 
   // Future<List<List<List<List<double>>>>> preprocessImageWithBatch(
   //     File imageFile) async {
@@ -143,7 +145,7 @@ Future<List<List<List<List<double>>>>> preprocessImageWithBatch(
 
     double similarity =
         dotProduct / (sqrt(normEmbedding1) * sqrt(normEmbedding2));
-    print(similarity);
+    print("similarity: " + similarity.toString());
 
     return similarity > .50;
   }
