@@ -81,16 +81,19 @@ initializeAI() async {
                   basename(file.path), embedding);
               dbHelper.insertImagePath(id, file.path);
             } else {
+              bool isInserted = false;
               for (var dbEmbedding in dbEmbeddingData) {
                 bool similarity = FaceRecognitionService()
                     .cosineSimilarity(embedding, dbEmbedding.embedding);
                 if (similarity) {
                   // found similarity
-                  log('found similarity');
+                  log('found similarity: ${dbEmbedding.id}');
                   dbHelper.insertImagePath(dbEmbedding.id, file.path);
-                } else {
-                  dbHelper.insertEmbedding(basename(file.path), embedding);
+                  isInserted = true;
                 }
+              }
+              if (!isInserted) {
+                dbHelper.insertEmbedding(basename(file.path), embedding);
               }
             }
           }
@@ -155,7 +158,7 @@ initializeAI() async {
 Future<void> startIsolate() async {
   print('Isolate starting...');
 
-  var isolate = await FlutterIsolate.spawn(aiBackgroundTask, 'initializeAI');
+  var isolate = await FlutterIsolate.spawn(aiBackgroundTask, 'main_send_port');
 
   // Listen for a message to indicate the task is completed
   ReceivePort receivePort = ReceivePort();
@@ -174,7 +177,8 @@ Future<void> startIsolate() async {
 
 void aiBackgroundTask(String message) async {
   print('Isolate running with message: $message');
-  var result = await initializeAI();  // Assuming initializeAI() is an async function.
+  var result =
+      await initializeAI(); // Assuming initializeAI() is an async function.
   SendPort? replyPort = IsolateNameServer.lookupPortByName('main_send_port');
   replyPort?.send(result);
 }

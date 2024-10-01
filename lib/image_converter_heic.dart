@@ -1,4 +1,6 @@
 import 'package:flutter/services.dart';
+import 'package:mediamanager/media.dart';
+import 'package:path_provider/path_provider.dart';
 
 class ImageConverter {
   // Private constructor
@@ -16,7 +18,9 @@ class ImageConverter {
   // Method to convert HEIC to JPEG
   Future<String> convertHeicToJpg(String filePath) async {
     try {
-      final String result = await _platform.invokeMethod('convertHeicToJpg', filePath);
+      String path = (await getApplicationDocumentsDirectory()).path;
+      // final String result = await _platform.invokeMethod('convertHeicToJpg', filePath);
+      String result = await compressImage(filePath, path);
       return result;
     } on PlatformException catch (e) {
       throw 'Failed to convert HEIC to JPEG: ${e.message}';

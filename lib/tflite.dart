@@ -95,42 +95,6 @@ class FaceRecognitionService {
     ]; // Wrapping it in a list to add the batch dimension
   }
 
-  // Future<List<List<List<List<double>>>>> preprocessImageWithBatch(
-  //     File imageFile) async {
-  //   // Load the image
-  //   img.Image? image = img.decodeImage(await imageFile.readAsBytes());
-
-  //   if (image == null) {
-  //     throw Exception('Unable to decode image');
-  //   }
-
-  //   // Resize the image to the expected input size (e.g., 224x224 for MobileNet)
-  //   img.Image resizedImage = img.copyResize(image, width: input, height: input);
-
-  //   // Normalize the pixel values between -1 and 1 (for MobileNet or similar models)
-  //   List<List<List<double>>> normalizedImage = [];
-
-  //   for (int y = 0; y < resizedImage.height; y++) {
-  //     List<List<double>> row = [];
-  //     for (int x = 0; x < resizedImage.width; x++) {
-  //       var pixel = resizedImage.getPixel(x, y);
-
-  //       // Convert ARGB to RGB and normalize (assuming a 0-255 pixel range)
-  //       double r = ((pixel.r.toInt() >> 16) & 0xFF) / 127.5 - 1.0;
-  //       double g = ((pixel.g.toInt() >> 8) & 0xFF) / 127.5 - 1.0;
-  //       double b = (pixel.b.toInt() & 0xFF) / 127.5 - 1.0;
-
-  //       row.add([r, g, b]);
-  //     }
-  //     normalizedImage.add(row);
-  //   }
-
-  //   // Add batch dimension to make it [1, height, width, channels]
-  //   return [
-  //     normalizedImage
-  //   ]; // Wrapping it in a list to add the batch dimension
-  // }
-
 // Function to calculate cosine similarity
   bool cosineSimilarity(List<double> embedding1, List<double> embedding2) {
     double dotProduct = 0.0;
@@ -147,6 +111,6 @@ class FaceRecognitionService {
         dotProduct / (sqrt(normEmbedding1) * sqrt(normEmbedding2));
     print("similarity: " + similarity.toString());
 
-    return similarity > .50;
+    return similarity > .60;
   }
 }

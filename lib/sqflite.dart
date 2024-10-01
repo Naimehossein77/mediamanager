@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:typed_data';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -40,17 +41,17 @@ class ImageModel {
 
 class DatabaseHelper {
   // Singleton instance
-  static final DatabaseHelper _instance = DatabaseHelper._internal();
-  factory DatabaseHelper() => _instance;
+  // static final DatabaseHelper _instance = DatabaseHelper._internal();
+  // factory DatabaseHelper() => _instance;
 
   // Database reference
-  static Database? _database;
+  Database? _database;
 
-  DatabaseHelper._internal();
+  // DatabaseHelper._internal();
 
   // Getter for the database
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null && _database!.isOpen) return _database!;
     // Instantiate the database
 
     _database = await initDatabase();
@@ -64,7 +65,6 @@ class DatabaseHelper {
     try {
       final documentsDirectory = await getApplicationDocumentsDirectory();
       final path = join(documentsDirectory.path, 'embeddings.db');
-      deleteDatabase(path);
       return await openDatabase(
         path,
         version: 1,
@@ -103,6 +103,7 @@ class DatabaseHelper {
 
   Future<int> insertImagePath(int userId, String imagePath) async {
     final db = await database;
+    log('insert imagePath: $imagePath');
     return await db
         .insert('user_images', {'user_id': userId, 'image_path': imagePath});
   }
@@ -125,15 +126,20 @@ class DatabaseHelper {
 
   Future<List<ImageModel>> getImagesByUserId(int userId) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'user_images',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-    );
-
-    return List.generate(maps.length, (i) {
-      return ImageModel.fromMap(maps[i]);
-    });
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'user_images',
+        // where: 'user_id = ?',
+        // whereArgs: [userId],
+      );
+      print('Query result: $maps');
+      return List.generate(maps.length, (i) {
+        return ImageModel.fromMap(maps[i]);
+      });
+    } catch (e) {
+      print('Error querying database: $e');
+      return [];
+    }
   }
 
   // Future<List<List<double>>> getAllEmbeddings() async {

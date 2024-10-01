@@ -11,39 +11,28 @@ import 'package:mediamanager/media.dart';
 import 'package:mediamanager/mlkit.dart';
 import 'package:mediamanager/sqflite.dart';
 import 'package:mediamanager/tflite.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
 void main() {
   BackgroundIsolateBinaryMessenger.ensureInitialized(
       RootIsolateToken.instance!);
-
   WidgetsFlutterBinding.ensureInitialized();
-
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
         primarySwatch: Colors.blue,
       ),
       home: MyHomePage(),
@@ -59,92 +48,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<AssetEntity> imageList = [];
-
-  List<File> personList = [];
-
-  List<List<double>> faceEmbeddings = [];
-
-  List<File> matchedImageList = [];
-  List<int> label = [];
   List<ImageModel> imageModelList = [];
-  DatabaseHelper dbHelper = DatabaseHelper();
-
-  Future<List<AssetEntity>> selectImages(int page) async {
-    return imageList = await fetchImages(page);
-  }
-
-  // initializeAI() async {
-  //   await FaceRecognitionService().loadModel();
-  //   for (int i = 0; i < 10; i++) {
-  //     this.imageList.clear();
-  //     this.personList.clear();
-  //     this.faceEmbeddings.clear();
-  //     this.imageList = await selectImages(i);
-  //     if (this.imageList.isEmpty) {
-  //       FaceDetectorManager.instance.dispose();
-
-  //       FaceRecognitionService().dispose();
-  //       break;
-  //     }
-  //     List<Face> faces = [];
-  //     File file;
-  //     // List<double> embedding = [];
-  //     List<List<double>> groupEmbedding = [];
-  //     for (var image in imageList) {
-  //       faces.clear();
-  //       // embedding.clear();
-  //       // groupEmbedding.clear();
-  //       file = await image.file ?? File('');
-  //       print("filepath: " + file.path);
-  //       if (file.path.contains('.HEIC') ||
-  //           file.path.contains('.heic') ||
-  //           file.path.contains('.heif')) {
-  //         String path =
-  //             await ImageConverter.instance.convertHeicToJpg(file.path);
-  //         file = File(path);
-  //       }
-  //       faces = await FaceDetectorManager.instance.detectFaces(file);
-  //       if (faces.isNotEmpty && file.path.isNotEmpty) {
-  //         for (var face in faces) {
-  //           File croppedFile = await cropImage(file, face);
-  //           groupEmbedding =
-  //               await FaceRecognitionService().getFaceEmbeddings(croppedFile);
-  //           var dbEmbeddingData = await dbHelper.getAllEmbeddings();
-
-  //           for (var embedding in groupEmbedding) {
-  //             if (dbEmbeddingData.isEmpty) {
-  //               int id = await dbHelper.insertEmbedding(
-  //                   basename(file.path), embedding);
-  //               dbHelper.insertImagePath(id, file.path);
-  //             } else {
-  //               for (var dbEmbedding in dbEmbeddingData) {
-  //                 bool similarity = FaceRecognitionService()
-  //                     .cosineSimilarity(embedding, dbEmbedding.embedding);
-  //                 if (similarity) {
-  //                   // found similarity
-  //                   log('found similarity');
-  //                   dbHelper.insertImagePath(dbEmbedding.id, file.path);
-  //                 } else {
-  //                   dbHelper.insertEmbedding(basename(file.path), embedding);
-  //                 }
-  //               }
-  //             }
-  //           }
-  //         }
-  //       }
-  //      await Future.delayed(Duration(seconds: 2));
-  //     }
-  //     setState(() {});
-  //     await Future.delayed(Duration(seconds: 3));
-  //   }
-  // }
-
-  getImageByUserId(int id) async {
-    this.imageModelList = await dbHelper.getImagesByUserId(id);
-    print(this.imageModelList);
-    setState(() {});
-  }
+  DatabaseHelper dbHelper = new DatabaseHelper();
 
   @override
   void initState() {
@@ -153,23 +58,24 @@ class _MyHomePageState extends State<MyHomePage> {
     requestPermissionAndCallAI();
   }
 
+  getImageByUserId(int id) async {
+    this.imageModelList = await dbHelper.getImagesByUserId(id);
+    print(this.imageModelList);
+    setState(() {});
+  }
+
   requestPermissionAndCallAI() async {
     PermissionStatus status = await requestStoragePhotosPermission();
     if (status.isGranted) {
       print('permission granted');
+      final documentsDirectory = await getApplicationDocumentsDirectory();
+      final path = join(documentsDirectory.path, 'embeddings.db');
+      deleteDatabase(path);
       startIsolate();
     }
   }
-
-  @override
-  void didChangeDependencies() {
-    // TODO: implement didChangeDependencies
-    super.didChangeDependencies();
-  }
-
   @override
   void dispose() {
-    // TODO: implement dispose
     super.dispose();
     DatabaseHelper().close();
     FaceDetectorManager.instance.dispose();
@@ -187,7 +93,10 @@ class _MyHomePageState extends State<MyHomePage> {
               children: [
                 ElevatedButton(
                   onPressed: () async {
-                    getImageByUserId(3);
+                    await dbHelper.initDatabase();
+                    for (int i = 0; i < 10; i++) await getImageByUserId(i);
+                    // print(await dbHelper.getAllEmbeddings());
+                    dbHelper.close();
                   },
                   child: Text("compare faces"),
                 ),

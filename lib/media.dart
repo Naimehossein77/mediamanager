@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -30,24 +31,24 @@ Future<List<AssetEntity>> fetchImages(int page) async {
 
   // Request permission first
 
-    final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
-      onlyAll: true,
-      hasAll: false,
-      type: RequestType.image,
-    );
-    print(albums);
-    List<AssetEntity> assets = [];
+  final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+    onlyAll: true,
+    hasAll: false,
+    type: RequestType.image,
+  );
+  print(albums);
+  List<AssetEntity> assets = [];
 
-    for (var path in albums) {
-      assets = await path.getAssetListPaged(page: page, size: 10);
-      images.addAll(assets);
-    }
-
-    for (var asset in images) {
-      print("Image: ${asset.relativePath}");
-    }
-    return assets;
+  for (var path in albums) {
+    assets = await path.getAssetListPaged(page: page, size: 10);
+    images.addAll(assets);
   }
+
+  for (var asset in images) {
+    print("Image: ${asset.relativePath}");
+  }
+  return assets;
+}
 
 Future<void> fetchImageMetadata(AssetEntity asset) async {
   var location = asset.latitude; // Get latitude
@@ -58,4 +59,14 @@ Future<void> fetchImageMetadata(AssetEntity asset) async {
   } else {
     print("No location data available for this image.");
   }
+}
+
+Future<String> compressImage(String imagePath, String targetPath) async {
+  var result = await FlutterImageCompress.compressAndGetFile(
+    imagePath,
+    targetPath + '_converted.jpeg',
+    quality: 90, // Adjust quality as needed
+    format: CompressFormat.jpeg, // Target format
+  );
+  return result?.path ?? '';
 }
