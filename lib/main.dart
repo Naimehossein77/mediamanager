@@ -1,40 +1,40 @@
+import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:mediamanager/copImage.dart';
-import 'package:mediamanager/dbscan.dart';
+import 'package:mediamanager/image_converter_heic.dart';
+import 'package:mediamanager/isolate_thread.dart';
 import 'package:mediamanager/media.dart';
 import 'package:mediamanager/mlkit.dart';
+import 'package:mediamanager/sqflite.dart';
 import 'package:mediamanager/tflite.dart';
+import 'package:mediamanager/view/grouped_image_view.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
+
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
 void main() {
+  BackgroundIsolateBinaryMessenger.ensureInitialized(
+      RootIsolateToken.instance!);
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
         primarySwatch: Colors.blue,
       ),
       home: MyHomePage(),
@@ -50,183 +50,117 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<AssetEntity> imageList = [];
-
-  List<File> personList = [];
-
-  List<List<double>> faceEmbeddings = [];
-
-  List<File> matchedImageList = [];
-  List<int> label = [];
-
-  Future<List<AssetEntity>> selectImages(int page) async {
-    return imageList = await fetchImages(page);
-  }
-
-  initializeAI() async {
-    await FaceRecognitionService().loadModel();
-    for (int i = 0; i < 10; i++) {
-      this.imageList.clear();
-      this.personList.clear();
-      this.faceEmbeddings.clear();
-      this.imageList = await selectImages(i);
-      if (this.imageList.isEmpty) break;
-      // fetchAllImageMetadata(this.imageList);
-      this.personList = await getDetectedFaces(this.imageList);
-      await getAllPersonFaceEmbedding(this.personList);
-      await getDbScanOnPerson(this.faceEmbeddings);
-      // this.matchedImageList = await compareFaces(personList);
-      setState(() {});
-      await Future.delayed(Duration(seconds: 10));
-    }
-  }
-
-  void fetchAllImageMetadata(List<AssetEntity> imageList) async {
-    for (var element in imageList) {
-      fetchImageMetadata(element);
-    }
-  }
-
-  Future<List<File>> getDetectedFaces(List<AssetEntity> imageList) async {
-    List<File> personList = [];
-    int i = 0;
-    File? file;
-    for (var element in imageList) {
-      List<Face> faces = await FaceDetectorManager.instance.detectFaces((await element.file) ?? File(''));
-      for (var face in faces) {
-        file = await cropImage(await element.file ?? File(''), face);
-        if (file != null && faces.isNotEmpty) {
-          personList.add(file);
-        }
-      }
-    }
-    return personList;
-  }
-
-  Future<List<List<double>>> getAllPersonFaceEmbedding(
-      List<File> personList) async {
-    try {
-      for (var element in personList) {
-        faceEmbeddings.addAll(
-            await FaceRecognitionService().getFaceEmbeddings((await element)));
-      }
-      print(faceEmbeddings.length);
-      return faceEmbeddings;
-    } catch (e) {
-      print(e);
-      return [];
-    }
-  }
-
-  Future<List<File>> compareFaces(List<File> personList) async {
-    try {
-      List<File> matchedList = [];
-      for (int i = 0; i < faceEmbeddings.length; i++) {
-        for (int j = i + 1; j < faceEmbeddings.length; j++) {
-          bool isSame = await FaceRecognitionService()
-              .cosineSimilarity(faceEmbeddings[i], faceEmbeddings[j]);
-          if (isSame) {
-            matchedList.add(personList[i]);
-            matchedList.add(personList[j]);
-          }
-        }
-      }
-      setState(() {});
-      return matchedList;
-    } catch (e) {
-      print(e);
-      return [];
-    }
-  }
-
-  getDbScanOnPerson(List<List<double>> embeddings) async {
-    double eps = .9; // Max distance for a neighbor
-    int minPts = 2; // Minimum points to form a cluster
-    // matchedImageList.clear();
-    // label.clear();
-    print(embeddings);
-    // int minPts = 2 * faceEmbeddings[0].length;
-    // double eps = findOptimalEps(faceEmbeddings, minPts);
-    print(minPts);
-    print(eps);
-    List<int> clusters = dbscan(embeddings, eps, minPts);
-    print(clusters);
-    for (int i = 0; i < personList.length; i++) {
-      if (clusters[i] != -1) {
-        matchedImageList.add(personList[i]);
-        label.add(clusters[i]);
-      }
-    }
-    print(clusters);
-    setState(() {});
-  }
+  List<ImageModel> imageModelList = [];
+  List<EmbeddingData> embeddingDataList = [];
+  DatabaseHelper dbHelper = new DatabaseHelper();
+  late Timer timer;
 
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    initializeAI();
+    requestPermissionAndCallAI();
+  }
+
+  getImageByUserId(int id) async {
+    this.imageModelList = await dbHelper.getImagesByUserId(id);
+    print(this.imageModelList);
+    setState(() {});
+  }
+
+  getAllEmbeddings() async {
+    await dbHelper.initDatabase();
+    this.embeddingDataList = await DatabaseHelper().getAllEmbeddings();
+    setState(() {});
+  }
+
+  requestPermissionAndCallAI() async {
+    PermissionStatus status = await requestStoragePhotosPermission();
+    if (status.isGranted) {
+      print('permission granted');
+      final documentsDirectory = await getApplicationDocumentsDirectory();
+      final path = join(documentsDirectory.path, 'embeddings.db');
+      deleteDatabase(path);
+      await startIsolate();
+      timer = Timer.periodic(Duration(seconds: 5), (timer) {
+        getAllEmbeddings();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    timer.cancel;
+    DatabaseHelper().close();
+    FaceDetectorManager.instance.dispose();
+    FaceRecognitionService().dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: Text('StoryBox\'s')),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Align(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // ElevatedButton(
-                //   onPressed: () async {
-                //     this.imageList = await selectImages();
-                //   },
-                //   child: Text("Select images"),
-                // ),
-                // ElevatedButton(
-                //   onPressed: () async {
-                //     fetchAllImageMetadata(this.imageList);
-                //   },
-                //   child: Text("Fetch Location"),
-                // ),
-                // ElevatedButton(
-                //   onPressed: () async {
-                //     this.personList = await getDetectedFaces(this.imageList);
-                //   },
-                //   child: Text("Detect Faces"),
-                // ),
-                // ElevatedButton(
-                //   onPressed: () async {
-                //     FaceRecognitionService().loadModel();
-                //   },
-                //   child: Text("load tflite model"),
-                // ),
-                // ElevatedButton(
-                //   onPressed: () async {
-                //     // getAllPersonFaceEmbedding(this.imageList);
-                //   },
-                //   child: Text("get face embeddings"),
-                // ),
+                SizedBox(height: 10),
                 ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color.fromARGB(193, 171, 135, 177),
+                  ),
                   onPressed: () async {
-                    getDbScanOnPerson(this.faceEmbeddings);
+                    // print(await getAllEmbeddings());
+                    var len = (await fetchImages(0)).length;
+                    // print(len);
                   },
-                  child: Text("compare faces"),
+                  child: Text("Refresh"),
                 ),
+                SizedBox(height: 20),
                 GridView.builder(
                     shrinkWrap: true,
                     physics: NeverScrollableScrollPhysics(),
-                    itemCount: matchedImageList.length,
+                    itemCount: embeddingDataList.length,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2, childAspectRatio: .7),
+                        crossAxisCount: 2,
+                        childAspectRatio: 1,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8),
                     itemBuilder: (context, index) {
-                      return Column(
-                        children: [
-                          Image.file(matchedImageList[index]),
-                          Text('${label[index]}')
-                        ],
+                      return InkWell(
+                        onTap: () async {
+                          await getImageByUserId(
+                              this.embeddingDataList[index].id);
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => GroupedImageView(
+                                      imageModelList: imageModelList)));
+                        },
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Color.fromARGB(193, 171, 135, 177),
+                          ),
+                          // child: Text(
+                          //   '${embeddingDataList[index].label}',
+                          //   textAlign: TextAlign.center,
+                          // ),
+                          child: Image.file(
+                            File(
+                              embeddingDataList[index].label,
+                            ),
+                            fit: BoxFit.cover,
+                            height: double.infinity,
+                            width: double.infinity,
+                          ),
+                        ),
                       );
                     }),
+
                 //   AssetEntityImage(
                 //     matchedImageList[index],
                 //     isOriginal: false, // Defaults to `true`.
@@ -240,56 +174,6 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class GroupedImagesView extends StatefulWidget {
-  GroupedImagesView({super.key});
-
-  @override
-  State<GroupedImagesView> createState() => _GroupedImagesViewState();
-}
-
-class _GroupedImagesViewState extends State<GroupedImagesView> {
-  Map<String, List<AssetEntity>> groupedImages = {};
-
-  @override
-  void initState() {
-    // TODO: implement initState
-    super.initState();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: ListView.builder(
-        itemCount: groupedImages.length,
-        itemBuilder: (context, index) {
-          String category = groupedImages.keys.elementAt(index);
-          List<AssetEntity> images = groupedImages[category]!;
-
-          return Column(
-            children: [
-              Text(category,
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3),
-                itemCount: images.length,
-                itemBuilder: (context, index) {
-                  return Image.file(
-                    File(images[index].relativePath ?? ''),
-                    fit: BoxFit.cover,
-                  );
-                },
-              ),
-            ],
-          );
-        },
       ),
     );
   }

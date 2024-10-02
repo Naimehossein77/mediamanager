@@ -5,6 +5,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+@pragma('vm:entry-point')
 Future<PermissionStatus> requestStoragePhotosPermission() async {
   await PhotoManager.requestPermissionExtend(
       requestOption: PermissionRequestOption(
@@ -26,30 +27,37 @@ Future<PermissionStatus> requestStoragePhotosPermission() async {
   return permission;
 }
 
+@pragma('vm:entry-point')
 Future<List<AssetEntity>> fetchImages(int page) async {
-  List<AssetEntity> images = [];
+  // List<AssetEntity> images = [];
 
   // Request permission first
 
   final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
-    onlyAll: true,
-    hasAll: false,
+    // onlyAll: true,
+    hasAll: true,
     type: RequestType.image,
   );
   print(albums);
   List<AssetEntity> assets = [];
 
   for (var path in albums) {
-    assets = await path.getAssetListPaged(page: page, size: 10);
-    images.addAll(assets);
+    if (path.name == 'Camera' ||
+        path.name == 'Recents' ||
+        path.name == 'recents' ||
+        path.name == 'Recent' ||
+        path.name == 'Recents')
+      assets = await path.getAssetListPaged(page: page, size: 10);
+    // images.addAll(assets);
   }
 
-  for (var asset in images) {
-    print("Image: ${asset.relativePath}");
-  }
+  // for (var asset in images) {
+  //   print("Image: ${asset.relativePath}");
+  // }
   return assets;
 }
 
+@pragma('vm:entry-point')
 Future<void> fetchImageMetadata(AssetEntity asset) async {
   var location = asset.latitude; // Get latitude
   var longitude = asset.longitude; // Get longitude
@@ -61,6 +69,7 @@ Future<void> fetchImageMetadata(AssetEntity asset) async {
   }
 }
 
+@pragma('vm:entry-point')
 Future<String> compressImage(String imagePath, String targetPath) async {
   var result = await FlutterImageCompress.compressAndGetFile(
     imagePath,

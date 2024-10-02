@@ -38,11 +38,12 @@ import 'package:path/path.dart';
 // }
 
 // Example function that might take significant time or resources
+@pragma('vm:entry-point')
 initializeAI() async {
   DatabaseHelper dbHelper = DatabaseHelper();
   await FaceRecognitionService().loadModel();
   List<AssetEntity> imageList = [];
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 1000; i++) {
     imageList.clear();
     imageList = await fetchImages(i);
     if (imageList.isEmpty) {
@@ -77,8 +78,7 @@ initializeAI() async {
 
           for (var embedding in groupEmbedding) {
             if (dbEmbeddingData.isEmpty) {
-              int id = await dbHelper.insertEmbedding(
-                  basename(file.path), embedding);
+              int id = await dbHelper.insertEmbedding(file.path, embedding);
               dbHelper.insertImagePath(id, file.path);
             } else {
               bool isInserted = false;
@@ -93,7 +93,8 @@ initializeAI() async {
                 }
               }
               if (!isInserted) {
-                dbHelper.insertEmbedding(basename(file.path), embedding);
+                int id = await dbHelper.insertEmbedding(file.path, embedding);
+                dbHelper.insertImagePath(id, file.path);
               }
             }
           }
@@ -154,7 +155,7 @@ initializeAI() async {
 //     );
 //   }
 // }
-
+@pragma('vm:entry-point')
 Future<void> startIsolate() async {
   print('Isolate starting...');
 
@@ -175,6 +176,7 @@ Future<void> startIsolate() async {
   isolate.controlPort!.send(receivePort.sendPort);
 }
 
+@pragma('vm:entry-point')
 void aiBackgroundTask(String message) async {
   print('Isolate running with message: $message');
   var result =

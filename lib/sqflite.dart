@@ -129,8 +129,8 @@ class DatabaseHelper {
     try {
       final List<Map<String, dynamic>> maps = await db.query(
         'user_images',
-        // where: 'user_id = ?',
-        // whereArgs: [userId],
+        where: 'user_id = ?',
+        whereArgs: [userId],
       );
       print('Query result: $maps');
       return List.generate(maps.length, (i) {
